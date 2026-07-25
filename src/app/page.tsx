@@ -4,61 +4,87 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { CategoryType, Article } from '@/lib/types';
 import { SEED_ARTICLES } from '@/lib/articles-data';
 import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 import { CategoryBar } from '@/components/CategoryBar';
 import { ArticleCard } from '@/components/ArticleCard';
 import { AiCompanionModal } from '@/components/AiCompanionModal';
 import { NewsGridSkeleton } from '@/components/Skeleton';
-import { Search, Sparkles, SlidersHorizontal, RefreshCw, Flame } from 'lucide-react';
+import { Search, Sparkles, RefreshCw, Flame, Lock, ArrowRight, Radio, CheckCircle2 } from 'lucide-react';
 
 export default function HomeFeed() {
+  const { user, openAuthModal } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<CategoryType>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'popular'>('newest');
   const [articles, setArticles] = useState<Article[]>(SEED_ARTICLES);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [livePage, setLivePage] = useState(1);
   const [selectedAiArticle, setSelectedAiArticle] = useState<Article | null>(null);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
 
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
+  // 1. Initial articles load
   useEffect(() => {
     async function fetchArticles() {
+      let baseArticles: Article[] = [...SEED_ARTICLES];
+
       if (supabase) {
         try {
-          const { data, error } = await supabase
+          const { data } = await supabase
             .from('articles')
             .select('*')
             .order('published_at', { ascending: false });
 
           if (data && data.length > 0) {
-            setArticles(data as Article[]);
-          } else {
-            setArticles(SEED_ARTICLES);
+            baseArticles = data as Article[];
           }
         } catch (err) {
           console.error('Error fetching Supabase articles, using seed data:', err);
-          setArticles(SEED_ARTICLES);
         }
-      } else {
-        setArticles(SEED_ARTICLES);
       }
+
+      setArticles(baseArticles);
       setLoading(false);
     }
 
     fetchArticles();
-  }, []);
+  }, [supabase]);
+
+  // 2. Fetch live online news feeds when user requests more
+  const handleLoadMoreLiveNews = async () => {
+    setLoadingMore(true);
+    const nextPage = livePage + 1;
+    try {
+      const res = await fetch(`/api/news/live?page=${nextPage}&per_page=12`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.articles && data.articles.length > 0) {
+          setArticles((prev) => {
+            const existingIds = new Set(prev.map((a) => a.id));
+            const newUnique = data.articles.filter((a: Article) => !existingIds.has(a.id));
+            return [...prev, ...newUnique];
+          });
+          setLivePage(nextPage);
+        }
+      }
+    } catch (err) {
+      console.error('Failed fetching live tech news feeds:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const filteredArticles = useMemo(() => {
     let result = [...articles];
 
-    // Filter by Category
     if (selectedCategory !== 'All') {
       result = result.filter(
         (a) => a.category?.toLowerCase() === selectedCategory.toLowerCase()
       );
     }
 
-    // Filter by Search Query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(
@@ -69,7 +95,6 @@ export default function HomeFeed() {
       );
     }
 
-    // Sort
     if (sortBy === 'popular') {
       result.sort((a, b) => (b.likes_count || 0) - (a.likes_count || 0));
     } else {
@@ -83,9 +108,17 @@ export default function HomeFeed() {
   }, [articles, selectedCategory, searchQuery, sortBy]);
 
   const handleOpenAiModal = (article: Article) => {
+    if (!user) {
+      openAuthModal('Sign up to use TechChurn AI assistant');
+      return;
+    }
     setSelectedAiArticle(article);
     setIsAiModalOpen(true);
   };
+
+  // Preview articles for unauthenticated state
+  const visibleArticles = user ? filteredArticles : filteredArticles.slice(0, 2);
+  const blurredArticles = user ? [] : filteredArticles.slice(2, 8);
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -96,8 +129,8 @@ export default function HomeFeed() {
 
         <div className="relative z-10 space-y-4 max-w-3xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
-            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-            <span>AI-Enhanced Tech Feed</span>
+            <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+            <span>Continuous Real-Time Tech Feeds</span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white leading-tight">
@@ -108,7 +141,7 @@ export default function HomeFeed() {
           </h1>
 
           <p className="text-sm sm:text-base text-neutral-300 leading-relaxed">
-            Curated break-throughs in AI, Quantum Computing, Mobile Hardware, Cybersecurity, and Clean Energy.
+            Live tech news streams from global developer communities, research labs, cybersecurity briefings, and clean energy startups.
           </p>
 
           {/* Search & Sort Controls */}
@@ -162,13 +195,13 @@ export default function HomeFeed() {
         />
       </section>
 
-      {/* Main Feed Section */}
+      {/* Main News Feed Section */}
       <section className="space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <span>{selectedCategory === 'All' ? 'Latest Stories' : selectedCategory}</span>
+            <span>{selectedCategory === 'All' ? 'Live Technology Stream' : selectedCategory}</span>
             <span className="text-xs font-medium text-neutral-400 bg-neutral-900 px-2.5 py-1 rounded-full border border-neutral-800">
-              {filteredArticles.length} {filteredArticles.length === 1 ? 'article' : 'articles'}
+              {filteredArticles.length} stories
             </span>
           </h2>
         </div>
@@ -176,14 +209,95 @@ export default function HomeFeed() {
         {loading ? (
           <NewsGridSkeleton count={6} />
         ) : filteredArticles.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredArticles.map((article) => (
-              <ArticleCard
-                key={article.id}
-                article={article}
-                onOpenAi={handleOpenAiModal}
-              />
-            ))}
+          <div className="space-y-8">
+            {/* Unlocked / Visible Articles */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {visibleArticles.map((article) => (
+                <ArticleCard
+                  key={article.id}
+                  article={article}
+                  onOpenAi={handleOpenAiModal}
+                />
+              ))}
+            </div>
+
+            {/* Blurred Locked Feed for Unauthenticated Users */}
+            {!user && blurredArticles.length > 0 && (
+              <div className="relative rounded-3xl overflow-hidden pt-4">
+                {/* Blurred News Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 filter blur-md opacity-40 select-none pointer-events-none">
+                  {blurredArticles.map((article) => (
+                    <ArticleCard
+                      key={article.id}
+                      article={article}
+                      onOpenAi={handleOpenAiModal}
+                    />
+                  ))}
+                </div>
+
+                {/* Locked Frost Glass Overlay Card */}
+                <div className="absolute inset-0 z-20 flex items-center justify-center p-4 bg-neutral-950/75 backdrop-blur-xl border border-neutral-800/80 rounded-3xl">
+                  <div className="max-w-md w-full text-center space-y-4 p-8 bg-neutral-900/90 border border-cyan-500/40 rounded-3xl shadow-2xl animate-scale-up">
+                    <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-tr from-cyan-500 to-indigo-600 p-0.5 shadow-lg shadow-cyan-500/20">
+                      <div className="w-full h-full bg-neutral-950 rounded-[14px] flex items-center justify-center">
+                        <Lock className="w-6 h-6 text-cyan-400" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <h3 className="text-xl font-extrabold text-white">
+                        Unlock Continuous Tech Feed
+                      </h3>
+                      <p className="text-xs text-neutral-300 leading-relaxed">
+                        Sign up for free to remove the blur, read full detailed articles, bookmark stories, and ask AI questions about any tech news!
+                      </p>
+                    </div>
+
+                    <div className="pt-2 flex flex-col gap-2">
+                      <button
+                        onClick={() => openAuthModal('Create an account to unlock continuous tech feeds')}
+                        className="w-full py-3 px-5 rounded-2xl text-xs font-extrabold bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white shadow-xl shadow-cyan-500/20 flex items-center justify-center gap-2 transition-all transform hover:scale-[1.02]"
+                      >
+                        <span>Sign Up to Unlock Full Feed</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="pt-2 flex items-center justify-center gap-4 text-[10px] text-neutral-400">
+                      <span className="flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-cyan-400" /> Free Forever
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-cyan-400" /> Live AI Assistant
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Continuous Infinite Feed Button (When Logged In) */}
+            {user && (
+              <div className="pt-6 text-center">
+                <button
+                  onClick={handleLoadMoreLiveNews}
+                  disabled={loadingMore}
+                  className="px-8 py-4 rounded-2xl text-xs font-extrabold bg-gradient-to-r from-neutral-900 via-indigo-950 to-neutral-900 hover:from-neutral-800 hover:to-indigo-900 text-cyan-300 border border-cyan-500/30 shadow-2xl flex items-center justify-center gap-2 mx-auto transition-all transform hover:scale-105"
+                >
+                  {loadingMore ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-cyan-400" />
+                      <span>Fetching Live Tech Feeds...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Radio className="w-4 h-4 text-cyan-400" />
+                      <span>Load More Continuous News Feeds 🚀</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-center py-16 px-4 bg-neutral-900/40 rounded-3xl border border-neutral-800 space-y-4">
