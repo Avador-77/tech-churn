@@ -61,6 +61,12 @@ CREATE POLICY "Users can update their own profile."
 CREATE POLICY "Articles are viewable by everyone." 
   ON public.articles FOR SELECT USING (true);
 
+CREATE POLICY "Authenticated users can insert articles." 
+  ON public.articles FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Authenticated users can update articles." 
+  ON public.articles FOR UPDATE USING (true);
+
 -- RLS Policies for Article Likes
 CREATE POLICY "Likes are viewable by everyone." 
   ON public.article_likes FOR SELECT USING (true);
@@ -103,8 +109,8 @@ VALUES
     'OpenAI Unveils Next-Gen Multimodal Reasoning Models for Real-Time Code Synthesis',
     'openai-next-gen-multimodal-reasoning-models',
     'The new model architecture introduces real-time reasoning capability with zero latency code synthesis and interactive debugging tools.',
-    'OpenAI has announced its latest breakthrough in AI model architectures, focusing on ultra-fast reasoning and native multimodal comprehension.\n\nKey Highlights:\n• Sub-100ms Reasoning: Complex reasoning chains execute in real-time.\n• Context Extension: Supports up to 2 million tokens of active working memory.\n• Multi-Agent Coordination: Native protocols for multi-agent delegation.',
-    'https://images.unsplash.com/photo-1677442136019-21780efad99a?q=80&w=1000&auto=format&fit=crop',
+    'OpenAI has announced its latest breakthrough in AI model architectures, focusing on ultra-fast reasoning and native multimodal comprehension.',
+    'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?q=80&w=1000&auto=format&fit=crop',
     'TechCrunch',
     'https://techcrunch.com',
     '🤖 AI',
@@ -115,7 +121,7 @@ VALUES
     'Quantum Chipset Breaks 1,000 Logical Qubit Barrier in Room Temperature Trial',
     'quantum-chipset-breaks-1000-logical-qubit-barrier',
     'Engineers achieve fault-tolerant quantum calculation at near room temperature using novel optical crystal lattices.',
-    'A consortium of quantum physics research labs has announced a monumental milestone: maintaining over 1,000 fault-tolerant logical qubits at room temperature.\n\nBreakthrough Details:\n• Optical Lattice Matrix: Uses micro-machined sapphire substrates to trap ions.\n• Error Correction Rate: Achieves a surface code error threshold under 0.001%.',
+    'A consortium of quantum physics research labs has announced a monumental milestone: maintaining over 1,000 fault-tolerant logical qubits at room temperature.',
     'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?q=80&w=1000&auto=format&fit=crop',
     'Wired',
     'https://wired.com',
@@ -127,7 +133,7 @@ VALUES
     'Next-Gen Foldable Smartphones Integrate Solid-State Batteries for 3-Day Battery Life',
     'foldable-smartphones-solid-state-batteries',
     'The latest mobile devices pack 7,500mAh capacity in a sleek 6mm chassis without overheating or battery degradation risks.',
-    'Mobile hardware makers have unveiled the first consumer smartphones equipped with commercial solid-state electrolyte batteries.\n\nWhat Makes This Revolutionizing:\n• 7,500 mAh in a 6.1mm Body\n• Ultra-Fast 200W Charging in 9 minutes\n• Zero Swelling Risk with solid electrolyte',
+    'Mobile hardware makers have unveiled the first consumer smartphones equipped with commercial solid-state electrolyte batteries.',
     'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=1000&auto=format&fit=crop',
     'The Verge',
     'https://theverge.com',

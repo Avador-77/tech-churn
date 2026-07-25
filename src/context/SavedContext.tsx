@@ -60,7 +60,7 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
             setLikedArticleIds(likesData.map((l: { article_id: string }) => l.article_id));
           }
 
-          // Fetch Saved Articles
+          // Fetch Saved Articles with joined article data
           const { data: savedData } = await supabase
             .from('saved_articles')
             .select('article_id, articles(*)')
@@ -80,7 +80,16 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
                 return cachedAll.find(a => a.id === s.article_id) || SEED_ARTICLES.find(a => a.id === s.article_id);
               })
               .filter((a): a is Article => Boolean(a));
+
             setSavedArticles(articlesList);
+
+            // Sync backup to local storage
+            try {
+              localStorage.setItem(`${LOCAL_STORAGE_SAVED_KEY}_${user.id}`, JSON.stringify(ids));
+              localStorage.setItem(`${LOCAL_STORAGE_SAVED_KEY}_articles_${user.id}`, JSON.stringify(articlesList));
+            } catch (e) {
+              console.error('Error updating localStorage backup:', e);
+            }
           }
         } catch (err) {
           console.error('Error fetching Supabase user preferences:', err);
@@ -154,6 +163,21 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
     if (supabase) {
       try {
         if (newLikedState) {
+          // 1. Ensure article exists in Supabase database
+          await supabase.from('articles').upsert({
+            id: article.id,
+            title: article.title,
+            slug: article.slug || article.id,
+            summary: article.summary,
+            content: article.content,
+            image_url: article.image_url,
+            source_name: article.source_name,
+            source_url: article.source_url,
+            category: article.category,
+            published_at: article.published_at,
+          });
+
+          // 2. Insert like record
           await supabase
             .from('article_likes')
             .insert({ user_id: user.id, article_id: article.id });
@@ -206,9 +230,25 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
       'success'
     );
 
+    // Supabase DB persistence
     if (supabase) {
       try {
         if (newSavedState) {
+          // 1. Ensure article exists in Supabase articles table
+          await supabase.from('articles').upsert({
+            id: article.id,
+            title: article.title,
+            slug: article.slug || article.id,
+            summary: article.summary,
+            content: article.content,
+            image_url: article.image_url,
+            source_name: article.source_name,
+            source_url: article.source_url,
+            category: article.category,
+            published_at: article.published_at,
+          });
+
+          // 2. Insert into saved_articles table
           await supabase
             .from('saved_articles')
             .insert({ user_id: user.id, article_id: article.id });
@@ -224,6 +264,7 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    // Local Storage backup
     try {
       localStorage.setItem(`${LOCAL_STORAGE_SAVED_KEY}_${user.id}`, JSON.stringify(newSavedIds));
       localStorage.setItem(`${LOCAL_STORAGE_SAVED_KEY}_articles_${user.id}`, JSON.stringify(newSavedArticles));
