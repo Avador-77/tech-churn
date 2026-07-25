@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { CategoryType, Article } from '@/lib/types';
-import { SEED_ARTICLES } from '@/lib/articles-data';
+import { SEED_ARTICLES, saveCachedArticles } from '@/lib/articles-data';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { CategoryBar } from '@/components/CategoryBar';
@@ -27,7 +27,7 @@ export default function HomeFeed() {
   const observerTargetRef = useRef<HTMLDivElement>(null);
   const supabase = useMemo(() => createClient(), []);
 
-  // 1. Fetch initial articles
+  // 1. Initial articles load
   useEffect(() => {
     async function fetchArticles() {
       let baseArticles: Article[] = [...SEED_ARTICLES];
@@ -48,6 +48,7 @@ export default function HomeFeed() {
       }
 
       setArticles(baseArticles);
+      saveCachedArticles(baseArticles);
       setLoading(false);
     }
 
@@ -65,6 +66,7 @@ export default function HomeFeed() {
       if (res.ok) {
         const data = await res.json();
         if (data.articles && data.articles.length > 0) {
+          saveCachedArticles(data.articles);
           setArticles((prev) => {
             const existingIds = new Set(prev.map((a) => a.id));
             const newItems = data.articles.filter((a: Article) => !existingIds.has(a.id));

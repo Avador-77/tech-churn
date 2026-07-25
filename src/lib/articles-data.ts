@@ -197,8 +197,40 @@ Technical Breakthroughs & Compiler Performance:
   }
 ];
 
+const DYNAMIC_CACHE_KEY = 'techchurn_dynamic_articles_cache';
+
+export function saveCachedArticles(newArticles: Article[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    const existing = getCachedArticles();
+    const map = new Map<string, Article>();
+    existing.forEach(a => map.set(a.id, a));
+    newArticles.forEach(a => map.set(a.id, a));
+    const merged = Array.from(map.values());
+    sessionStorage.setItem(DYNAMIC_CACHE_KEY, JSON.stringify(merged));
+  } catch (e) {
+    console.error('Failed saving dynamic articles cache:', e);
+  }
+}
+
+export function getCachedArticles(): Article[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const data = sessionStorage.getItem(DYNAMIC_CACHE_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 export function getArticleById(idOrSlug: string): Article | undefined {
-  return SEED_ARTICLES.find(
+  // Check static seed array first
+  const staticMatch = SEED_ARTICLES.find(
     (a) => a.id === idOrSlug || a.slug === idOrSlug
   );
+  if (staticMatch) return staticMatch;
+
+  // Check dynamic cache array next
+  const cached = getCachedArticles();
+  return cached.find((a) => a.id === idOrSlug || a.slug === idOrSlug);
 }
