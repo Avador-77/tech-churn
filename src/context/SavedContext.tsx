@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { Article } from '@/lib/types';
-import { SEED_ARTICLES } from '@/lib/articles-data';
+import { SEED_ARTICLES, getCachedArticles } from '@/lib/articles-data';
 
 interface SavedContextType {
   likedArticleIds: string[];
@@ -71,12 +71,13 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
             setSavedArticleIds(ids);
             
             const typedSavedData = savedData as unknown as Array<{ article_id: string; articles?: Article | Article[] }>;
+            const cachedAll = getCachedArticles();
             const articlesList: Article[] = typedSavedData
               .map((s) => {
                 if (s.articles) {
                   return Array.isArray(s.articles) ? s.articles[0] : s.articles;
                 }
-                return SEED_ARTICLES.find(a => a.id === s.article_id);
+                return cachedAll.find(a => a.id === s.article_id) || SEED_ARTICLES.find(a => a.id === s.article_id);
               })
               .filter((a): a is Article => Boolean(a));
             setSavedArticles(articlesList);
@@ -95,15 +96,25 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
     function fallbackToLocalStorage() {
       if (!user || !isMounted) return;
       try {
+        // Restore Likes
         const localLikes = localStorage.getItem(`${LOCAL_STORAGE_LIKES_KEY}_${user.id}`);
         if (localLikes) setLikedArticleIds(JSON.parse(localLikes));
 
-        const localSavedIds = localStorage.getItem(`${LOCAL_STORAGE_SAVED_KEY}_${user.id}`);
-        if (localSavedIds) {
-          const parsedIds: string[] = JSON.parse(localSavedIds);
+        // Restore Saved Article Objects
+        const storedArticles = localStorage.getItem(`${LOCAL_STORAGE_SAVED_KEY}_articles_${user.id}`);
+        const storedIds = localStorage.getItem(`${LOCAL_STORAGE_SAVED_KEY}_${user.id}`);
+
+        if (storedArticles && storedIds) {
+          const parsedArticles: Article[] = JSON.parse(storedArticles);
+          const parsedIds: string[] = JSON.parse(storedIds);
           setSavedArticleIds(parsedIds);
+          setSavedArticles(parsedArticles);
+        } else if (storedIds) {
+          const parsedIds: string[] = JSON.parse(storedIds);
+          setSavedArticleIds(parsedIds);
+          const cachedAll = getCachedArticles();
           const articlesList = parsedIds
-            .map((id) => SEED_ARTICLES.find((a) => a.id === id))
+            .map((id) => cachedAll.find((a) => a.id === id) || SEED_ARTICLES.find((a) => a.id === id))
             .filter((a): a is Article => Boolean(a));
           setSavedArticles(articlesList);
         }
@@ -179,15 +190,16 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
     const currentlySaved = isSaved(article.id);
     const newSavedState = !currentlySaved;
 
-    setSavedArticleIds((prev) =>
-      newSavedState ? [...prev, article.id] : prev.filter((id) => id !== article.id)
-    );
+    const newSavedIds = newSavedState
+      ? [...savedArticleIds, article.id]
+      : savedArticleIds.filter((id) => id !== article.id);
 
-    setSavedArticles((prev) =>
-      newSavedState
-        ? [...prev.filter((a) => a.id !== article.id), article]
-        : prev.filter((a) => a.id !== article.id)
-    );
+    const newSavedArticles = newSavedState
+      ? [...savedArticles.filter((a) => a.id !== article.id), article]
+      : savedArticles.filter((a) => a.id !== article.id);
+
+    setSavedArticleIds(newSavedIds);
+    setSavedArticles(newSavedArticles);
 
     showToast(
       newSavedState ? 'Saved to your bookmarks! 🔖' : 'Removed from bookmarks',
@@ -213,10 +225,8 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const updatedIds = newSavedState
-        ? [...savedArticleIds, article.id]
-        : savedArticleIds.filter((id) => id !== article.id);
-      localStorage.setItem(`${LOCAL_STORAGE_SAVED_KEY}_${user.id}`, JSON.stringify(updatedIds));
+      localStorage.setItem(`${LOCAL_STORAGE_SAVED_KEY}_${user.id}`, JSON.stringify(newSavedIds));
+      localStorage.setItem(`${LOCAL_STORAGE_SAVED_KEY}_articles_${user.id}`, JSON.stringify(newSavedArticles));
     } catch (e) {
       console.error('Failed saving to localStorage:', e);
     }
