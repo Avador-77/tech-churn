@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { CategoryType, Article } from '@/lib/types';
 import { SEED_ARTICLES } from '@/lib/articles-data';
 import { createClient } from '@/lib/supabase/client';
@@ -18,13 +18,20 @@ export default function HomeFeed() {
   const [sortBy, setSortBy] = useState<'newest' | 'popular'>('newest');
   const [articles, setArticles] = useState<Article[]>(SEED_ARTICLES);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [livePage, setLivePage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [selectedAiArticle, setSelectedAiArticle] = useState<Article | null>(null);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
 
+  const observerTargetRef = useRef<HTMLDivElement>(null);
   const supabase = useMemo(() => createClient(), []);
 
+  // 1. Fetch initial articles
   useEffect(() => {
     async function fetchArticles() {
+      let baseArticles: Article[] = [...SEED_ARTICLES];
+
       if (supabase) {
         try {
           const { data } = await supabase
@@ -33,22 +40,70 @@ export default function HomeFeed() {
             .order('published_at', { ascending: false });
 
           if (data && data.length > 0) {
-            setArticles(data as Article[]);
-          } else {
-            setArticles(SEED_ARTICLES);
+            baseArticles = data as Article[];
           }
         } catch (err) {
           console.error('Error fetching Supabase articles, using seed data:', err);
-          setArticles(SEED_ARTICLES);
         }
-      } else {
-        setArticles(SEED_ARTICLES);
       }
+
+      setArticles(baseArticles);
       setLoading(false);
     }
 
     fetchArticles();
   }, [supabase]);
+
+  // 2. Function to fetch next batch of live articles via Option B API
+  const fetchMoreArticles = useCallback(async () => {
+    if (loadingMore || !hasMore || !user) return;
+    setLoadingMore(true);
+
+    const nextPage = livePage + 1;
+    try {
+      const res = await fetch(`/api/news/live?page=${nextPage}&per_page=8`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.articles && data.articles.length > 0) {
+          setArticles((prev) => {
+            const existingIds = new Set(prev.map((a) => a.id));
+            const newItems = data.articles.filter((a: Article) => !existingIds.has(a.id));
+            return [...prev, ...newItems];
+          });
+          setLivePage(nextPage);
+        } else {
+          setHasMore(false);
+        }
+      }
+    } catch (err) {
+      console.error('Error lazy loading live news:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [livePage, loadingMore, hasMore, user]);
+
+  // 3. Intersection Observer for Lazy Loading at bottom of page
+  useEffect(() => {
+    if (!user || !hasMore || loading) return;
+
+    const targetNode = observerTargetRef.current;
+    if (!targetNode) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          fetchMoreArticles();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+
+    observer.observe(targetNode);
+
+    return () => {
+      observer.unobserve(targetNode);
+    };
+  }, [user, hasMore, loading, fetchMoreArticles]);
 
   const filteredArticles = useMemo(() => {
     let result = [...articles];
@@ -90,7 +145,7 @@ export default function HomeFeed() {
     setIsAiModalOpen(true);
   };
 
-  // Preview articles for unauthenticated state
+  // Unauthenticated view shows preview cards + blur overlay
   const visibleArticles = user ? filteredArticles : filteredArticles.slice(0, 2);
   const blurredArticles = user ? [] : filteredArticles.slice(2);
 
@@ -246,6 +301,20 @@ export default function HomeFeed() {
                       </span>
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Lazy Loading Sentinel & Loading Indicator for Authenticated Users */}
+            {user && (
+              <div className="pt-4 text-center">
+                <div ref={observerTargetRef} className="h-10 flex items-center justify-center">
+                  {loadingMore && (
+                    <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-neutral-900 border border-neutral-800 text-xs font-semibold text-cyan-400 shadow-md">
+                      <RefreshCw className="w-4 h-4 animate-spin text-cyan-400" />
+                      <span>Loading fresh tech stories...</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
