@@ -44,6 +44,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 full_name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0],
               },
             });
+          } else {
+            setIsAuthModalOpen(true);
+            setAuthModalPrompt('Create an account to unlock TechChurn news feed & AI features');
           }
         } catch (error) {
           console.error('Supabase auth session error:', error);
@@ -72,9 +75,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const savedDemoUser = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
           if (savedDemoUser) {
             setUser(JSON.parse(savedDemoUser));
+          } else {
+            // First time visit without saved session -> open Sign Up modal automatically
+            setIsAuthModalOpen(true);
+            setAuthModalPrompt('Create an account to unlock TechChurn news feed & AI features');
           }
         } catch (e) {
           console.error('Failed to load demo user', e);
+          setIsAuthModalOpen(true);
         }
         setLoading(false);
       }

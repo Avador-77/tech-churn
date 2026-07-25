@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 
 export function AuthModal() {
   const { isAuthModalOpen, closeAuthModal, login, signup, demoLogin, authModalPrompt } = useAuth();
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<'login' | 'signup'>('signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
